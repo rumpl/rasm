@@ -28,7 +28,7 @@ pub struct FuncType {
     pub results: Vec<Val>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Instr {
     LocalGet(u32),
 
@@ -40,14 +40,14 @@ pub enum Instr {
 pub struct Func {
     ty: FuncType,
     locals: Vec<Val>,
-    body: Vec<Instr>,
+    pub(crate) body: Vec<Instr>,
 }
 
 #[derive(Debug, PartialEq)]
 pub struct Export {
-    name: String,
+    pub(crate) name: String,
     ty: u64,
-    idx: u64,
+    pub(crate) idx: u64,
 }
 
 #[derive(Debug, PartialEq, Default)]
@@ -92,20 +92,16 @@ impl Module {
             }
             let section = contents.get_u8();
 
-            println!("section {section}");
             match section {
-                0x0 => bail!("meh"),
                 0x01 => func_types = Self::parse_type_section(&mut contents)?,
                 0x03 => {
                     module.funcs = Self::parse_function_section(&mut contents, func_types.clone())?
                 }
                 0x07 => module.exports = Self::parse_export_section(&mut contents)?,
                 0x0A => Self::parse_code_section(&mut contents, &mut module)?,
-                _ => break,
+                _ => bail!("Unknown section id {section}"),
             }
         }
-
-        println!("{module:?}");
 
         Ok(module)
     }
