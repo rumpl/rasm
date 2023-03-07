@@ -3,7 +3,7 @@ use anyhow::Result;
 
 pub struct Instance;
 impl Instance {
-    pub(crate) fn new(store: &mut Store, module: &Module) -> Result<Self> {
+    pub(crate) fn new(_store: &mut Store, _module: &Module) -> Result<Self> {
         Ok(Self {})
     }
 }

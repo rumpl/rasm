@@ -127,12 +127,12 @@ impl Module {
 
             let params_len = leb128::read::unsigned(&mut contents)?;
             for _ in 0..params_len {
-                func_type.params.push(Self::parse_val(&mut contents)?);
+                func_type.params.push(Self::parse_val(contents)?);
             }
 
-            let results_len = leb128::read::unsigned(&mut contents)?;
+            let results_len = leb128::read::unsigned(contents)?;
             for _ in 0..results_len {
-                func_type.results.push(Self::parse_val(&mut contents)?);
+                func_type.results.push(Self::parse_val(contents)?);
             }
 
             result.push(func_type);
@@ -215,7 +215,13 @@ impl Module {
         let n = contents.get_u8();
 
         match n {
-            127 => Ok(Val::I32),
+            0x7F => Ok(Val::I32),
+            0x7E => Ok(Val::I64),
+            0x7D => Ok(Val::F32),
+            0x7C => Ok(Val::F64),
+            0x7B => Ok(Val::V128),
+            0x70 => Ok(Val::FuncRef),
+            0x6F => Ok(Val::ExternRef),
             _ => bail!("unknown type {n}"),
         }
     }
