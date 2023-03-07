@@ -29,7 +29,12 @@ pub struct FuncType {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Instr {}
+pub enum Instr {
+    LocalGet(u32),
+
+    I32Add,
+    End,
+}
 
 #[derive(Debug, PartialEq)]
 pub struct Func {
@@ -39,7 +44,11 @@ pub struct Func {
 }
 
 #[derive(Debug, PartialEq)]
-pub struct Export {}
+pub struct Export {
+    name: String,
+    ty: u64,
+    idx: u64,
+}
 
 #[derive(Debug, PartialEq, Default)]
 pub struct Module {
@@ -78,6 +87,9 @@ impl Module {
 
         let mut func_types = Vec::new();
         loop {
+            if contents.remaining() == 0 {
+                break;
+            }
             let section = contents.get_u8();
 
             println!("section {section}");
@@ -88,12 +100,12 @@ impl Module {
                     module.funcs = Self::parse_function_section(&mut contents, func_types.clone())?
                 }
                 0x07 => module.exports = Self::parse_export_section(&mut contents)?,
-                // 0x0A => parse code section
+                0x0A => Self::parse_code_section(&mut contents, &mut module)?,
                 _ => break,
             }
-
-            println!("{module:?}");
         }
+
+        println!("{module:?}");
 
         Ok(module)
     }
@@ -154,30 +166,79 @@ impl Module {
     }
 
     fn parse_export_section(mut contents: &mut &[u8]) -> Result<Vec<Export>> {
-        let a = contents.get_u8();
-        println!("section {a}");
-        let n = leb128::read::unsigned(&mut contents)?;
-        println!("section length: {n}");
+        let mut result = Vec::new();
 
-        let n = leb128::read::unsigned(&mut contents)?;
-        println!("vec length: {n}");
-        let n = leb128::read::unsigned(&mut contents)?;
-        println!("func length: {n}");
+        let _section_len = leb128::read::unsigned(&mut contents)?;
+        let num_exports = leb128::read::unsigned(&mut contents)?;
 
-        let n = leb128::read::unsigned(&mut contents)?;
-        println!("num locals: {n}");
+        for _ in 0..num_exports {
+            let n = leb128::read::unsigned(&mut contents)?;
 
-        // contents is the body
-        println!("{contents:#x?}");
-        Ok(Vec::new())
+            let mut name = bytes::Buf::take(contents, n as usize);
+            let mut n = vec![];
+            n.put(&mut name);
+
+            contents = name.into_inner();
+
+            let name = String::from_utf8(n)?;
+            let ty = leb128::read::unsigned(&mut contents)?;
+            let idx = leb128::read::unsigned(&mut contents)?;
+
+            result.push(Export { name, ty, idx })
+        }
+
+        Ok(result)
     }
 
-    fn parse_val(contents: &mut &mut &[u8]) -> Result<Val> {
+    fn parse_code_section(mut contents: &mut &[u8], module: &mut Module) -> Result<()> {
+        let _section_len = leb128::read::unsigned(&mut contents)?;
+
+        let n = leb128::read::unsigned(&mut contents)?;
+        for i in 0..n {
+            let _func_len = leb128::read::unsigned(&mut contents)?;
+
+            let num_locals = leb128::read::unsigned(&mut contents)?;
+            let mut locals = Vec::new();
+            for _ in 0..num_locals {
+                locals.push(Self::parse_val(contents)?);
+            }
+
+            let mut f = module.funcs.get_mut(i as usize).unwrap();
+            f.locals = locals;
+            f.body = Self::parse_instructions(contents)?;
+        }
+
+        Ok(())
+    }
+
+    fn parse_val(contents: &mut &[u8]) -> Result<Val> {
         let n = contents.get_u8();
 
         match n {
             127 => Ok(Val::I32),
-            _ => bail!("unknown type"),
+            _ => bail!("unknown type {n}"),
         }
+    }
+
+    fn parse_instructions(mut contents: &mut &[u8]) -> Result<Vec<Instr>> {
+        let mut result = Vec::new();
+
+        loop {
+            if contents.remaining() == 0 {
+                break;
+            }
+            let opcode = contents.get_u8();
+
+            let instr = match opcode {
+                0x20 => Instr::LocalGet(leb128::read::unsigned(&mut contents)? as u32),
+                0x6A => Instr::I32Add,
+                0x0B => Instr::End,
+                _ => bail!("Unknown opcode {opcode:#x}"),
+            };
+
+            result.push(instr);
+        }
+
+        Ok(result)
     }
 }
