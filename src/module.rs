@@ -138,11 +138,15 @@ impl Module {
         let mut result = Vec::new();
         for _ in 0..function_len {
             let idx = leb128::read::unsigned(&mut contents)?;
-            result.push(Func {
-                ty: func_types.get(idx as usize).unwrap().clone(), // TODO: remove the unwrap here
-                locals: Vec::new(),
-                body: Vec::new(),
-            })
+            if let Some(ty) = func_types.get(idx as usize) {
+                result.push(Func {
+                    ty: ty.clone(),
+                    locals: Vec::new(),
+                    body: Vec::new(),
+                });
+            } else {
+                bail!("Unable to find function type {}", idx);
+            }
         }
 
         Ok(result)
