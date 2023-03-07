@@ -88,6 +88,7 @@ impl Module {
                     module.funcs = Self::parse_function_section(&mut contents, func_types.clone())?
                 }
                 0x07 => module.exports = Self::parse_export_section(&mut contents)?,
+                // 0x0A => parse code section
                 _ => break,
             }
 
