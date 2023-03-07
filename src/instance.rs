@@ -61,6 +61,10 @@ impl Function {
                     let result = self.i32_add(&mut stack)?;
                     stack.push(result);
                 }
+                Instr::I32Mul => {
+                    let result = self.i32_mul(&mut stack)?;
+                    stack.push(result);
+                }
                 Instr::End => break,
             }
         }
@@ -71,6 +75,15 @@ impl Function {
     fn i32_add(&self, stack: &mut Vec<Value>) -> Result<Value> {
         match (stack.pop(), stack.pop()) {
             (Some(Value::I32(left)), Some(Value::I32(right))) => Ok(Value::I32(left + right)),
+            _ => bail!("wrong types for i32_add"),
+        }
+    }
+
+    fn i32_mul(&self, stack: &mut Vec<Value>) -> Result<Value> {
+        match (stack.pop(), stack.pop()) {
+            (Some(Value::I32(left)), Some(Value::I32(right))) => {
+                Ok(Value::I32(left.saturating_mul(right)))
+            }
             _ => bail!("wrong types for i32_add"),
         }
     }

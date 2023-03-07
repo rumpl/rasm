@@ -33,6 +33,7 @@ pub enum Instr {
     LocalGet(u32),
 
     I32Add,
+    I32Mul,
     End,
 }
 
@@ -234,6 +235,7 @@ impl Module {
             let instr = match opcode {
                 0x20 => Instr::LocalGet(leb128::read::unsigned(&mut contents)? as u32),
                 0x6A => Instr::I32Add,
+                0x6C => Instr::I32Mul,
                 0x0B => Instr::End,
                 _ => bail!("Unknown opcode {opcode:#x}"),
             };
