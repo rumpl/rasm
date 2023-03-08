@@ -1,5 +1,5 @@
 use crate::store::Store;
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use bytes::{Buf, BufMut};
 use std::path::Path;
 
@@ -192,17 +192,27 @@ impl Module {
 
         let n = leb128::read::unsigned(&mut contents)?;
         for i in 0..n {
-            let _func_len = leb128::read::unsigned(&mut contents)?;
+            let mut f = module.funcs.get_mut(i as usize).unwrap();
+
+            let func_len = leb128::read::unsigned(&mut contents)?;
 
             let num_locals = leb128::read::unsigned(&mut contents)?;
+            let er = func_len - num_locals - 1;
             let mut locals = Vec::new();
             for _ in 0..num_locals {
-                locals.push(Self::parse_val(contents)?);
+                let n = leb128::read::unsigned(&mut contents)?;
+                let val = Self::parse_val(contents).context("parse local")?;
+                for _ in 0..n {
+                    locals.push(val.clone());
+                }
             }
 
-            let mut f = module.funcs.get_mut(i as usize).unwrap();
+            let mut ne = bytes::Buf::take(contents, er as usize);
+            let mut b = vec![];
+            b.put(&mut ne);
             f.locals = locals;
-            f.body = Self::parse_instructions(contents)?;
+            f.body = Self::parse_instructions(&mut b.as_ref())?;
+            contents = ne.into_inner();
         }
 
         Ok(())
