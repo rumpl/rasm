@@ -66,6 +66,10 @@ impl Function {
                     stack.push(result);
                 }
                 Instr::End => break,
+                Instr::Call(_) => todo!(),
+                Instr::ConstF64(_) => todo!(),
+                Instr::LoadI32(_) => todo!(),
+                Instr::DivI32U => todo!(),
             }
         }
 

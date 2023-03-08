@@ -32,9 +32,15 @@ pub struct FuncType {
 pub enum Instr {
     LocalGet(u32),
 
+    LoadI32(i32),
+
     I32Add,
     I32Mul,
+
+    Call(u32),
+    DivI32U,
     End,
+    ConstF64(f64),
 }
 
 #[derive(Debug, PartialEq)]
@@ -67,7 +73,7 @@ impl Module {
 
         let contents: &[u8] = contents.as_ref();
 
-        let mut magic = contents.take(4);
+        let mut magic = bytes::Buf::take(contents, 4);
         let mut dst = vec![];
         dst.put(&mut magic);
         if dst != MAGIC {
@@ -76,7 +82,7 @@ impl Module {
 
         let contents = magic.into_inner();
 
-        let mut version = contents.take(4);
+        let mut version = bytes::Buf::take(contents, 4);
         let mut dst = vec![];
         dst.put(&mut version);
 
@@ -94,13 +100,28 @@ impl Module {
             let section = contents.get_u8();
 
             match section {
-                0x01 => func_types = Self::parse_type_section(&mut contents)?,
-                0x03 => {
-                    module.funcs = Self::parse_function_section(&mut contents, func_types.clone())?
+                0x01 => {
+                    func_types =
+                        Self::parse_type_section(&mut contents).context("parse type section")?
                 }
-                0x07 => module.exports = Self::parse_export_section(&mut contents)?,
-                0x0A => Self::parse_code_section(&mut contents, &mut module)?,
-                _ => bail!("Unknown section id {section}"),
+                0x03 => {
+                    module.funcs = Self::parse_function_section(&mut contents, func_types.clone())
+                        .context("parse function section")?
+                }
+                0x07 => {
+                    module.exports =
+                        Self::parse_export_section(&mut contents).context("parse export section")?
+                }
+                0x0A => Self::parse_code_section(&mut contents, &mut module)
+                    .context("parse code section")?,
+                _ => {
+                    let section_len = leb128::read::unsigned(&mut contents)?;
+                    let mut t = bytes::Buf::take(contents, section_len as usize);
+                    let mut dst = vec![];
+                    dst.put(&mut t);
+                    contents = t.into_inner();
+                    println!("Unknown section id {section}, skipping");
+                }
             }
         }
 
@@ -243,11 +264,27 @@ impl Module {
             let opcode = contents.get_u8();
 
             let instr = match opcode {
+                0x00 => continue,
                 0x20 => Instr::LocalGet(leb128::read::unsigned(&mut contents)? as u32),
+                0x28 => Instr::LoadI32(leb128::read::signed(&mut contents)? as i32),
+                0x44 => {
+                    let mut name = bytes::Buf::take(contents, 8);
+                    let mut n: [u8; 8] = [0; 8];
+                    name.copy_to_slice(&mut n);
+                    contents = name.into_inner();
+                    Instr::ConstF64(f64::from_le_bytes(n))
+                }
+
                 0x6A => Instr::I32Add,
                 0x6C => Instr::I32Mul,
+                0x10 => Instr::Call(leb128::read::unsigned(&mut contents)? as u32),
+                0x80 => Instr::DivI32U,
                 0x0B => Instr::End,
-                _ => bail!("Unknown opcode {opcode:#x}"),
+
+                _ => {
+                    // println!("Unknown opcode {opcode:#x}");
+                    continue;
+                }
             };
 
             result.push(instr);
